@@ -1,0 +1,11 @@
+vote:
+  replicaCount: 2
+
+result:
+  replicaCount: 2
+
+worker:
+  replicaCount: 2
+
+postgres:
+  storage: 5Gi

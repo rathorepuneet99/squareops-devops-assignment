@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: result
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: result
+
+spec:
+  replicas: {{ .Values.result.replicaCount }}
+
+  selector:
+    matchLabels:
+      app: result
+
+  template:
+    metadata:
+      labels:
+        app: result
+
+    spec:
+      containers:
+        - name: result
+
+          image: "{{ .Values.result.image.repository }}:{{ .Values.result.image.tag }}"
+          imagePullPolicy: {{ .Values.result.image.pullPolicy }}
+
+          ports:
+            - containerPort: 80
+
+          env:
+            - name: POSTGRES_HOST
+              value: db
+
+            - name: POSTGRES_DB
+              value: {{ .Values.postgres.database | quote }}
+
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+
+          resources:
+            requests:
+              cpu: {{ .Values.result.resources.requests.cpu | quote }}
+              memory: {{ .Values.result.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.result.resources.limits.cpu | quote }}
+              memory: {{ .Values.result.resources.limits.memory | quote }}
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 20
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 5
