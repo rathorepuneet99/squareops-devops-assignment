@@ -16,15 +16,7 @@ namespace Worker
         {
             try
             {
-                var dbHost = Environment.GetEnvironmentVariable("DB_HOST") ?? "postgres";
-                var dbUser = Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "postgres";
-                var dbPassword = Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? "postgres";
-                var dbName = Environment.GetEnvironmentVariable("POSTGRES_DB") ?? "postgres";
-
-var connectionString =
-    $"Host={dbHost};Username={dbUser};Password={dbPassword};Database={dbName};";
-
-var pgsql = OpenDbConnection(connectionString);
+                var pgsql = OpenDbConnection("Server=db;Username=postgres;Password=postgres;");
                 var redisConn = OpenRedisConnection("redis");
                 var redis = redisConn.GetDatabase();
 
@@ -40,24 +32,29 @@ var pgsql = OpenDbConnection(connectionString);
                     Thread.Sleep(100);
 
                     // Reconnect redis if down
-                    if (redisConn == null || !redisConn.IsConnected) {
+                    if (redisConn == null || !redisConn.IsConnected)
+                    {
                         Console.WriteLine("Reconnecting Redis");
                         redisConn = OpenRedisConnection("redis");
                         redis = redisConn.GetDatabase();
                     }
+
                     string json = redis.ListLeftPopAsync("votes").Result;
+
                     if (json != null)
                     {
                         var vote = JsonConvert.DeserializeAnonymousType(json, definition);
                         Console.WriteLine($"Processing vote for '{vote.vote}' by '{vote.voter_id}'");
+
                         // Reconnect DB if down
                         if (!pgsql.State.Equals(System.Data.ConnectionState.Open))
                         {
                             Console.WriteLine("Reconnecting DB");
-                            pgsql = OpenDbConnection(connectionString);
+                            pgsql = OpenDbConnection("Server=db;Username=postgres;Password=postgres;");
                         }
                         else
-                        { // Normal +1 vote requested
+                        {
+                            // Normal +1 vote requested
                             UpdateVote(pgsql, vote.voter_id, vote.vote);
                         }
                     }
@@ -141,6 +138,7 @@ var pgsql = OpenDbConnection(connectionString);
         private static void UpdateVote(NpgsqlConnection connection, string voterId, string vote)
         {
             var command = connection.CreateCommand();
+
             try
             {
                 command.CommandText = "INSERT INTO votes (id, vote) VALUES (@id, @vote)";

@@ -48,9 +48,9 @@ worker:
   replicaCount: 1
 
   image:
-    repository: puneet74350/examplevotingapp_worker
+    repository: dockersamples/examplevotingapp_worker
     tag: latest
-    pullPolicy: Never
+    pullPolicy: IfNotPresent
 
   resources:
     requests:
