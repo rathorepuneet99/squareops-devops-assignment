@@ -30,7 +30,7 @@ spec:
               value: redis
 
             - name: DB_HOST
-              value: db
+              value: postgres
 
             - name: POSTGRES_DB
               value: {{ .Values.postgres.database | quote }}

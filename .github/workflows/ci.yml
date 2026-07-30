@@ -1,0 +1,186 @@
+name: SquareOps CI
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths:
+      - "vote/**"
+      - "helm/**"
+      - ".github/workflows/**"
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "vote/**"
+      - "helm/**"
+
+env:
+  IMAGE_NAME: vote-app
+  NAMESPACE: squareops
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+
+      ############################################################
+      # Checkout
+      ############################################################
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      ############################################################
+      # Python
+      ############################################################
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8
+          pip install -r vote/requirements.txt
+
+      - name: Lint Python Code
+        run: |
+          flake8 vote
+
+      ############################################################
+      # Helm Validation
+      ############################################################
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint Helm Chart
+        run: |
+          helm lint ./helm/voting-app
+
+      ############################################################
+      # Docker
+      ############################################################
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./vote
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/vote-app:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/vote-app:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      ############################################################
+      # Create Kind Cluster
+      ############################################################
+
+      - name: Create Kind Cluster
+        uses: helm/kind-action@v1
+
+      ############################################################
+      # Install NGINX Ingress
+      ############################################################
+
+      - name: Install NGINX Ingress
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+
+          kubectl wait \
+            --namespace ingress-nginx \
+            --for=condition=Ready pod \
+            --selector=app.kubernetes.io/component=controller \
+            --timeout=300s
+
+      ############################################################
+      # Deploy using Helm
+      ############################################################
+
+      - name: Deploy Helm Chart
+        run: |
+          helm upgrade --install voting-app \
+            ./helm/voting-app \
+            --namespace ${NAMESPACE} \
+            --create-namespace \
+            --set vote.image.repository=${{ secrets.DOCKER_USERNAME }}/vote-app \
+            --set vote.image.tag=${{ github.sha }}
+
+      ############################################################
+      # Verify Rollouts
+      ############################################################
+
+      - name: Verify Rollouts
+        run: |
+          kubectl rollout status deployment/vote -n ${NAMESPACE}
+          kubectl rollout status deployment/result -n ${NAMESPACE}
+          kubectl rollout status deployment/worker -n ${NAMESPACE}
+          kubectl rollout status deployment/redis -n ${NAMESPACE}
+          kubectl rollout status statefulset/postgres -n ${NAMESPACE}
+
+      ############################################################
+      # Wait for Pods
+      ############################################################
+
+      - name: Wait for Pods
+        run: |
+          kubectl wait \
+            --for=condition=Ready pod \
+            --all \
+            -n ${NAMESPACE} \
+            --timeout=300s
+
+      ############################################################
+      # Smoke Test
+      ############################################################
+
+      - name: Smoke Test
+        run: |
+          kubectl port-forward svc/vote 8080:80 -n ${NAMESPACE} &
+          sleep 15
+          curl --fail http://localhost:8080
+
+      ############################################################
+      # Diagnostics
+      ############################################################
+
+      - name: Collect Diagnostics
+        if: failure()
+        run: |
+          echo "========== PODS =========="
+          kubectl get pods -A
+
+          echo "========== SERVICES =========="
+          kubectl get svc -A
+
+          echo "========== INGRESS =========="
+          kubectl get ingress -A
+
+          echo "========== EVENTS =========="
+          kubectl get events -A --sort-by=.metadata.creationTimestamp
+
+          echo "========== POD DESCRIPTION =========="
+          kubectl describe pods -n ${NAMESPACE}
+
+          echo "========== LOGS =========="
+          kubectl logs -n ${NAMESPACE} --all-containers=true --tail=100 || true

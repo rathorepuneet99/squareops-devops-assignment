@@ -1,16 +1,16 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: db
+  name: postgres
   namespace: {{ .Values.namespace }}
   labels:
-    app: db
+    app: postgres
 
 spec:
   clusterIP: None
 
   selector:
-    app: db
+    app: postgres
 
   ports:
     - name: postgres
