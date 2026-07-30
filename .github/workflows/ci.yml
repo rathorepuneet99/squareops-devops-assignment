@@ -136,7 +136,7 @@ jobs:
           kubectl rollout status deployment/result -n ${NAMESPACE}
           kubectl rollout status deployment/worker -n ${NAMESPACE}
           kubectl rollout status deployment/redis -n ${NAMESPACE}
-          kubectl rollout status statefulset/postgres -n ${NAMESPACE}
+          kubectl rollout status statefulset/db -n ${NAMESPACE}
 
       ############################################################
       # Wait for Pods
