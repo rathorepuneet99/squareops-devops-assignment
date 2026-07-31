@@ -1,350 +1,360 @@
 # SquareOps DevOps Assignment
 
-## Overview
+## 📌 Project Overview
 
-This repository contains my solution for the **SquareOps DevOps Take-Home Assignment**.
+This project demonstrates the deployment of a distributed voting application on a **Kubernetes cluster** using **Kind**, **Helm**, and **GitHub Actions**.
 
-The project demonstrates the deployment and automation of a distributed voting application using **Docker Compose**, **Kubernetes**, **Helm**, and **GitHub Actions CI/CD**.
+The solution follows DevOps best practices by automating the complete deployment lifecycle—from cluster creation to application deployment—using a **bootstrap script**, Helm charts, and a CI/CD pipeline.
 
-The solution includes containerization, Kubernetes deployment, Helm packaging, PostgreSQL persistence using StatefulSets, and an automated CI/CD pipeline.
+The application is built using a microservices architecture consisting of a Vote application, Redis, Worker, PostgreSQL, and Result application.
 
 ---
 
-# Project Architecture
+# 🏗️ End-to-End Architecture
 
-```
-                GitHub Repository
+```text
+                    Developer
                         │
                         ▼
-               GitHub Actions CI/CD
+               GitHub Repository
                         │
-      ┌─────────────────┴──────────────────┐
-      │                                    │
-      ▼                                    ▼
- Build Docker Image               Helm Deployment
-      │                                    │
-      ▼                                    ▼
- Push to DockerHub                 Kind Kubernetes Cluster
-                                            │
-                                            ▼
-        ┌──────────────┬───────────────┬──────────────┐
-        │              │               │              │
-        ▼              ▼               ▼              ▼
-      Vote App      Redis          Worker       PostgreSQL
-                                             (StatefulSet)
+                        ▼
+             GitHub Actions Workflow
+                        │
+                        ▼
+                 Helm Deployment
+                        │
+                        ▼
+                 bootstrap.sh
+                        │
+        ┌───────────────┴────────────────┐
+        │                                │
+        ▼                                ▼
+  Create Kind Cluster         Install NGINX Ingress
+        │
+        ▼
++---------------------------------------------------------------+
+|                 Kubernetes Cluster (Kind)                     |
+|                Namespace : squareops                          |
+|                                                               |
+|  Vote App ─────► Redis ─────► Worker ─────► PostgreSQL        |
+|      ▲                                         │              |
+|      │                                         ▼              |
+|      └──────────────────── Result App ◄────────┘              |
+|                                                               |
+| Services                                                      |
+| • Vote (NodePort)                                             |
+| • Result (NodePort)                                           |
+| • Redis (ClusterIP)                                           |
+| • PostgreSQL (Headless Service)                               |
++---------------------------------------------------------------+
 ```
 
 ---
 
-# Technologies Used
+# 🚀 Features
+
+- Automated Kubernetes Cluster Provisioning using **Kind**
+- Automated Environment Setup using **bootstrap.sh**
+- Helm-based Kubernetes Deployment
+- GitHub Actions CI/CD Pipeline
+- Redis Message Queue
+- PostgreSQL StatefulSet for Persistent Storage
+- NGINX Ingress Controller
+- Kubernetes Deployments & Services
+- Infrastructure Automation
+- Deployment Verification
+- End-to-End Containerized Microservices
+
+---
+
+# 🏗️ Application Components
+
+| Component | Purpose |
+|-----------|---------|
+| Vote | Frontend application used to cast votes |
+| Redis | Temporary message queue |
+| Worker | Reads votes from Redis and stores them into PostgreSQL |
+| PostgreSQL | Persistent relational database |
+| Result | Displays live voting results |
+
+---
+
+# 🛠️ Technologies Used
 
 - Docker
-- Docker Compose
 - Kubernetes
 - Kind
 - Helm
 - GitHub Actions
-- Python
-- Flask
-- Redis
 - PostgreSQL
+- Redis
+- NGINX Ingress Controller
+- Git
+- Linux
 
 ---
 
-# Repository Structure
+# 📁 Project Structure
 
-```
-squareops-devops-assignment
+```text
+squareops-devops-assignment/
 │
-├── .github/
-│   └── workflows/
-│       └── ci-cd.yml
+├── bootstrap.sh
 │
 ├── helm/
 │   └── voting-app/
 │       ├── Chart.yaml
 │       ├── values.yaml
-│       ├── values-dev.yaml
-│       ├── values-staging.yaml
 │       └── templates/
+│            ├── namespace.yaml
+│            ├── ingress.yaml
+│            ├── secret.yaml
+│            ├── vote-deployment.yaml
+│            ├── vote-service.yaml
+│            ├── worker-deployment.yaml
+│            ├── redis-deployment.yaml
+│            ├── redis-service.yaml
+│            ├── postgres-statefulset.yaml
+│            ├── postgres-service.yaml
+│            ├── result-deployment.yaml
+│            └── result-service.yaml
 │
-├── healthchecks/
-│
-├── vote/
-│
-├── docker-compose.yml
+├── .github/
+│   └── workflows/
+│       └── deploy.yml
 │
 └── README.md
 ```
 
 ---
 
-# Running the Application using Docker Compose
+# ⚙️ Bootstrap Automation
 
-Clone the repository
+The project includes a **bootstrap.sh** script that automates the complete Kubernetes environment setup.
 
-```bash
-git clone https://github.com/rathorepuneet99/squareops-devops-assignment.git
-cd squareops-devops-assignment
-```
-
-Start the application
+Running a single command:
 
 ```bash
-docker compose up --build
+./bootstrap.sh
 ```
 
-Application URLs
+performs the following tasks automatically:
 
-| Service | URL |
-|----------|-----|
-| Vote App | http://localhost:8082 |
-| Result App | http://localhost:8081 |
+- Creates the Kind Kubernetes cluster
+- Installs the NGINX Ingress Controller
+- Waits until the Ingress Controller is ready
+- Creates the required Kubernetes namespace
+- Deploys the application using Helm
+- Waits for Deployments and StatefulSet rollout
+- Verifies that the application has been successfully deployed
+
+This automation eliminates repetitive manual setup and ensures a consistent deployment process.
 
 ---
 
-# Kubernetes Deployment
+# ⛵ Helm Deployment
 
-Create a Kind cluster
+The application is packaged using a reusable Helm chart.
 
-```bash
-kind create cluster --name voting-app
-```
+The Helm chart manages:
 
-Install the Helm chart
+- Deployments
+- Services
+- StatefulSet
+- Secrets
+- Namespace
+- Ingress
 
-```bash
-helm install voting-app ./helm/voting-app \
--n squareops \
---create-namespace
-```
+Application configuration is centralized inside:
 
-Verify resources
-
-```bash
-kubectl get all -n squareops
-```
-
-Verify StatefulSet
-
-```bash
-kubectl get statefulsets -n squareops
-```
-
-Verify Persistent Volume Claim
-
-```bash
-kubectl get pvc -n squareops
-```
-
----
-
-# Helm
-
-Validate Helm chart
-
-```bash
-helm lint ./helm/voting-app
-```
-
-Install
-
-```bash
-helm install voting-app ./helm/voting-app \
--n squareops \
---create-namespace
-```
-
-Upgrade
-
-```bash
-helm upgrade voting-app ./helm/voting-app \
--n squareops
-```
-
-Uninstall
-
-```bash
-helm uninstall voting-app -n squareops
-```
-
----
-
-# CI/CD Pipeline
-
-The GitHub Actions workflow automatically performs the following steps whenever changes are pushed to the **vote/** directory.
-
-- Checkout repository
-- Setup Python
-- Install Python dependencies
-- Run Flake8 code linting
-- Install kubeconform
-- Validate Kubernetes manifests
-- Build Docker image
-- Login to DockerHub
-- Push Docker image
-- Create Kind cluster
-- Install Helm
-- Deploy the application
-- Wait for all pods
-- Execute smoke tests
-
-Workflow location
-
-```
-.github/workflows/ci-cd.yml
-```
-
----
-
-# Helm Features
-
-The Helm chart includes
-
-- PostgreSQL StatefulSet
-- Persistent Volume Claim
-- Headless Service
-- Kubernetes Secrets
-- ConfigMaps
-- Resource Requests
-- Resource Limits
-- Liveness Probes
-- Readiness Probes
-- Environment-specific values files
-
----
-
-# Environment Configuration
-
-Development
-
-```
-values-dev.yaml
-```
-
-Staging
-
-```
-values-staging.yaml
-```
-
-Default
-
-```
+```text
 values.yaml
 ```
 
+This allows images, ports, replica counts, resource limits, and deployment parameters to be managed from a single configuration file.
+
 ---
 
-# Useful Commands
+# 🔄 GitHub Actions CI/CD Pipeline
 
-Check pods
+The repository includes a GitHub Actions workflow that automates application deployment.
+
+The pipeline performs the following steps:
+
+1. Checkout Repository
+2. Configure Kubernetes Access
+3. Create Namespace (if required)
+4. Deploy or Upgrade Helm Release
+5. Wait for Deployments
+6. Wait for PostgreSQL StatefulSet
+7. Verify Successful Deployment
+
+This provides a reliable, repeatable, and automated deployment workflow.
+
+---
+
+# 🚀 Deployment Steps
+
+## Clone the Repository
+
+```bash
+git clone <repository-url>
+
+cd squareops-devops-assignment
+```
+
+---
+
+## Run Bootstrap Script
+
+```bash
+./bootstrap.sh
+```
+
+---
+
+## Verify Deployment
+
+Check Pods
 
 ```bash
 kubectl get pods -n squareops
 ```
 
-Check services
+Check Services
 
 ```bash
 kubectl get svc -n squareops
 ```
 
-Check deployments
+Check Ingress
 
 ```bash
-kubectl get deployments -n squareops
+kubectl get ingress -n squareops
 ```
 
-Check StatefulSets
+Check StatefulSet
 
 ```bash
-kubectl get statefulsets -n squareops
+kubectl get statefulset -n squareops
 ```
 
-Describe pod
+---
+
+# 🌐 Access the Application
+
+Vote Application
+
+```
+http://localhost:8082
+```
+
+Result Application
+
+```
+http://localhost:8081
+```
+
+Cast votes using the Vote application and observe live updates on the Result application.
+
+---
+
+# 📊 Kubernetes Resources
+
+| Resource | Kubernetes Object |
+|----------|-------------------|
+| Vote | Deployment |
+| Worker | Deployment |
+| Redis | Deployment |
+| PostgreSQL | StatefulSet |
+| Result | Deployment |
+| Services | ClusterIP & NodePort |
+| Ingress | NGINX Ingress |
+
+---
+
+# 🔍 Troubleshooting
+
+Useful Kubernetes commands:
+
+### Check Pods
+
+```bash
+kubectl get pods -n squareops
+```
+
+### Describe a Pod
 
 ```bash
 kubectl describe pod <pod-name> -n squareops
 ```
 
-View logs
+### View Logs
 
 ```bash
 kubectl logs <pod-name> -n squareops
 ```
 
----
-
-# Verification
-
-Validate Helm chart
+### Check Services
 
 ```bash
-helm lint ./helm/voting-app
+kubectl get svc -n squareops
 ```
 
-Run Docker Compose
+### Check StatefulSet
 
 ```bash
-docker compose up --build
+kubectl get statefulset -n squareops
 ```
 
-Deploy using Helm
+### Check Ingress
 
 ```bash
-helm install voting-app ./helm/voting-app \
--n squareops \
---create-namespace
-```
-
-Verify deployment
-
-```bash
-kubectl get all -n squareops
+kubectl get ingress -n squareops
 ```
 
 ---
 
-# Future Improvements
+# 🎯 Learning Outcomes
 
-- HTTPS Ingress with TLS
-- Horizontal Pod Autoscaler
-- Prometheus Monitoring
-- Grafana Dashboards
-- ArgoCD GitOps Deployment
-- Multi-environment Helm Releases
+This project demonstrates practical experience with:
+
+- Kubernetes Cluster Provisioning
+- Helm Chart Development
+- Kubernetes Deployments
+- Stateful Applications
+- Kubernetes Networking
+- NGINX Ingress
+- Infrastructure Automation
+- GitHub Actions CI/CD
+- Container Orchestration
+- Microservices Deployment
+- Kubernetes Troubleshooting
+- DevOps Best Practices
 
 ---
 
-# Author
+# 📌 Key Highlights
+
+- Automated cluster creation using Kind
+- One-command environment setup using `bootstrap.sh`
+- Reusable Helm charts
+- Automated CI/CD using GitHub Actions
+- Persistent PostgreSQL StatefulSet
+- Redis-based asynchronous processing
+- Kubernetes-native deployment
+- Production-style project structure
+- Infrastructure automation and deployment verification
+
+---
+
+# 👨‍💻 Author
 
 **Puneet Rathore**
 
-GitHub: https://github.com/rathorepuneet99
+**PG Diploma in Big Data Analytics (CDAC)**
 
----
+### Skills
 
-## Assignment Highlights
-
-✔ Docker Compose Deployment
-
-✔ Kubernetes Deployment
-
-✔ PostgreSQL StatefulSet
-
-✔ Persistent Storage
-
-✔ Helm Chart
-
-✔ Environment-specific Values
-
-✔ GitHub Actions CI/CD
-
-✔ DockerHub Image Publishing
-
-✔ Automated Helm Deployment
-
-✔ Smoke Testing
-
-✔ Infrastructure Automation
+Docker • Kubernetes • Helm • GitHub Actions • AWS • Terraform • Jenkins • Python • Linux • Git
